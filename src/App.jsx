@@ -120,6 +120,7 @@ const vocabulary = {
 };
 
 const STORAGE_KEY = "vokabeltrainer-progress";
+const CUSTOM_VOCABULARY_KEY = "vokabeltrainer-custom-vocabulary";
 const SUBJECTS = ["je", "tu", "il / elle", "nous", "vous", "ils / elles"];
 const GRAMMAR = {
   er: { label: "-er", verbs: ["parler", "aimer", "jouer"], present: ["e", "es", "e", "ons", "ez", "ent"], pp: "é" },
@@ -137,9 +138,29 @@ function shuffle(items) {
   return copy;
 }
 
-function flatten(selected) {
+function normalizeCustomVocabulary(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+
+  return Object.fromEntries(
+    Object.entries(raw)
+      .map(([category, entries]) => [
+        category.trim(),
+        Array.isArray(entries)
+          ? entries
+              .map((entry) => ({
+                de: typeof entry?.de === "string" ? entry.de.trim() : "",
+                fr: typeof entry?.fr === "string" ? entry.fr.trim() : "",
+              }))
+              .filter((entry) => entry.de && entry.fr)
+          : [],
+      ])
+      .filter(([category]) => category)
+  );
+}
+
+function flatten(selected, sourceVocabulary) {
   return selected.flatMap((category) =>
-    vocabulary[category].map((item) => ({
+    (sourceVocabulary[category] || []).map((item) => ({
       ...item,
       category,
       id: `${category}__${item.de}__${item.fr}`,
@@ -150,6 +171,14 @@ function flatten(selected) {
 function loadProgress() {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function loadCustomVocabulary() {
+  try {
+    return normalizeCustomVocabulary(JSON.parse(localStorage.getItem(CUSTOM_VOCABULARY_KEY) || "{}"));
   } catch {
     return {};
   }
@@ -173,8 +202,11 @@ function conjugate(verb, group, tense, index) {
 }
 
 export default function App() {
-  const categories = Object.keys(vocabulary);
-  const [selectedCategories, setSelectedCategories] = useState(categories.slice(0, 4));
+  const baseCategories = Object.keys(vocabulary);
+  const [customVocabulary, setCustomVocabulary] = useState({});
+  const allVocabulary = useMemo(() => ({ ...vocabulary, ...customVocabulary }), [customVocabulary]);
+  const categories = Object.keys(allVocabulary);
+  const [selectedCategories, setSelectedCategories] = useState(baseCategories.slice(0, 4));
   const [mode, setMode] = useState("cards");
   const [direction, setDirection] = useState("de-fr");
   const [stats, setStats] = useState({});
@@ -188,12 +220,24 @@ export default function App() {
   const [grammarGroup, setGrammarGroup] = useState("er");
   const [grammarTense, setGrammarTense] = useState("present");
   const [grammarQuestion, setGrammarQuestion] = useState(null);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newWordCategory, setNewWordCategory] = useState("");
+  const [newGermanWord, setNewGermanWord] = useState("");
+  const [newFrenchWord, setNewFrenchWord] = useState("");
+  const [customMessage, setCustomMessage] = useState("");
 
-  const cards = useMemo(() => flatten(selectedCategories.length ? selectedCategories : categories), [selectedCategories]);
+  const cards = useMemo(
+    () => flatten(selectedCategories.length ? selectedCategories : categories, allVocabulary),
+    [selectedCategories, categories.join("|"), allVocabulary]
+  );
   const learned = useMemo(() => cards.filter((card) => isLearned(stats, card.id)), [cards, stats]);
 
-  useEffect(() => setStats(loadProgress()), []);
+  useEffect(() => {
+    setStats(loadProgress());
+    setCustomVocabulary(loadCustomVocabulary());
+  }, []);
   useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(stats)), [stats]);
+  useEffect(() => localStorage.setItem(CUSTOM_VOCABULARY_KEY, JSON.stringify(customVocabulary)), [customVocabulary]);
 
   const nextQueue = () => {
     const next = shuffle(cards);
@@ -210,7 +254,7 @@ export default function App() {
       right: shuffle(pairs.map((card) => ({ id: card.id, text: card.fr }))),
       done: [],
     });
-  }, [cards.length, selectedCategories.join("|")]);
+  }, [cards.length, selectedCategories.join("|"), categories.join("|")]);
 
   const effectiveDirection = direction === "mixed" ? (Math.random() > 0.5 ? "de-fr" : "fr-de") : direction;
   const prompt = current ? (effectiveDirection === "de-fr" ? current.de : current.fr) : "Keine Karten";
@@ -279,6 +323,55 @@ export default function App() {
   useEffect(() => {
     if (mode === "grammar") buildGrammar();
   }, [mode, grammarGroup, grammarTense]);
+
+  const addCategory = (event) => {
+    event.preventDefault();
+    const category = newCategoryName.trim();
+    if (!category) return;
+    if (allVocabulary[category]) {
+      setCustomMessage("Diese Kategorie gibt es schon.");
+      return;
+    }
+
+    setCustomVocabulary((old) => ({ ...old, [category]: [] }));
+    setSelectedCategories((old) => [...old, category]);
+    setNewWordCategory(category);
+    setNewCategoryName("");
+    setCustomMessage(`Kategorie "${category}" wurde erstellt.`);
+  };
+
+  const addVocabularyEntry = (event) => {
+    event.preventDefault();
+    const category = newWordCategory.trim();
+    const de = newGermanWord.trim();
+    const fr = newFrenchWord.trim();
+    if (!category || !de || !fr) {
+      setCustomMessage("Bitte Kategorie, Deutsch und Französisch ausfüllen.");
+      return;
+    }
+
+    setCustomVocabulary((old) => {
+      const existing = old[category] || [];
+      const exists = existing.some((entry) => entry.de.toLowerCase() === de.toLowerCase() && entry.fr.toLowerCase() === fr.toLowerCase());
+      if (exists) return old;
+      return { ...old, [category]: [...existing, { de, fr }] };
+    });
+    setSelectedCategories((old) => (old.includes(category) ? old : [...old, category]));
+    setNewGermanWord("");
+    setNewFrenchWord("");
+    setCustomMessage(`"${de}" wurde gespeichert.`);
+  };
+
+  const removeCustomEntry = (category, indexToRemove) => {
+    setCustomVocabulary((old) => {
+      const nextEntries = (old[category] || []).filter((_, index) => index !== indexToRemove);
+      if (nextEntries.length) return { ...old, [category]: nextEntries };
+      const { [category]: removed, ...rest } = old;
+      return rest;
+    });
+  };
+
+  const customCategories = Object.keys(customVocabulary);
 
   return (
     <main>
@@ -409,13 +502,87 @@ export default function App() {
                 onClick={() => setSelectedCategories((old) => old.includes(category) ? old.filter((item) => item !== category) : [...old, category])}
               >
                 <strong>{category}</strong>
-                <span>{vocabulary[category].length} Karten</span>
+                <span>{allVocabulary[category].length} Karten</span>
               </button>
             ))}
           </div>
           <button className="danger" onClick={() => setStats({})}>Fortschritt zurücksetzen</button>
         </aside>
       </div>
+
+      <section className="panel customPanel">
+        <div className="customHeader">
+          <div>
+            <p className="eyebrow">Eigene Inhalte</p>
+            <h2>Eigene Kategorien und Vokabeln</h2>
+          </div>
+          <span>{customCategories.length} eigene Kategorien</span>
+        </div>
+
+        <div className="customGrid">
+          <form className="customForm" onSubmit={addCategory}>
+            <label htmlFor="categoryName">Neue Kategorie</label>
+            <input
+              id="categoryName"
+              value={newCategoryName}
+              onChange={(event) => setNewCategoryName(event.target.value)}
+              placeholder="z. B. Urlaub"
+            />
+            <button className="primary" type="submit">Kategorie erstellen</button>
+          </form>
+
+          <form className="customForm" onSubmit={addVocabularyEntry}>
+            <label htmlFor="wordCategory">Vokabel hinzufügen</label>
+            <select
+              id="wordCategory"
+              value={newWordCategory}
+              onChange={(event) => setNewWordCategory(event.target.value)}
+            >
+              <option value="">Kategorie wählen</option>
+              {customCategories.map((category) => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+            <input
+              value={newGermanWord}
+              onChange={(event) => setNewGermanWord(event.target.value)}
+              placeholder="Deutsch"
+            />
+            <input
+              value={newFrenchWord}
+              onChange={(event) => setNewFrenchWord(event.target.value)}
+              placeholder="Französisch"
+            />
+            <button className="primary" type="submit">Vokabel speichern</button>
+          </form>
+        </div>
+
+        {customMessage && <div className="notice good">{customMessage}</div>}
+
+        <div className="customList">
+          {customCategories.length === 0 ? (
+            <div className="emptyState">Noch keine eigenen Kategorien gespeichert.</div>
+          ) : (
+            customCategories.map((category) => (
+              <div className="customCategory" key={category}>
+                <div className="customCategoryTitle">
+                  <strong>{category}</strong>
+                  <span>{customVocabulary[category].length} Vokabeln</span>
+                </div>
+                <div className="customEntries">
+                  {customVocabulary[category].map((entry, index) => (
+                    <div className="customEntry" key={`${entry.de}-${entry.fr}-${index}`}>
+                      <span>{entry.de}</span>
+                      <span>{entry.fr}</span>
+                      <button type="button" onClick={() => removeCustomEntry(category, index)}>Löschen</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
     </main>
   );
 }

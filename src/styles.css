@@ -13,7 +13,8 @@ body {
 }
 
 button,
-select {
+select,
+input {
   font: inherit;
 }
 
@@ -104,7 +105,8 @@ h2 {
 }
 
 button,
-select {
+select,
+input {
   background: #fff;
   border: 1px solid #cfc7bc;
   border-radius: 8px;
@@ -114,7 +116,8 @@ select {
 }
 
 button:hover,
-select:hover {
+select:hover,
+input:hover {
   border-color: #8a3a2b;
 }
 
@@ -250,6 +253,97 @@ button.active,
   width: 100%;
 }
 
+.customPanel {
+  margin-top: 16px;
+}
+
+.customHeader {
+  align-items: end;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.customHeader .eyebrow {
+  margin-bottom: 6px;
+}
+
+.customHeader span,
+.emptyState {
+  color: #666;
+}
+
+.customGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
+}
+
+.customForm {
+  background: #f8f6f2;
+  border: 1px solid #e2dbd1;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.customForm label {
+  font-weight: 800;
+}
+
+.customList {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.customCategory {
+  border: 1px solid #e2dbd1;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.customCategoryTitle,
+.customEntry {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+}
+
+.customCategoryTitle {
+  background: #f8f6f2;
+  grid-template-columns: 1fr auto;
+  padding: 12px 14px;
+}
+
+.customCategoryTitle span {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.customEntries {
+  display: grid;
+}
+
+.customEntry {
+  border-top: 1px solid #e8e0d6;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  padding: 10px 14px;
+}
+
+.customEntry span {
+  overflow-wrap: anywhere;
+}
+
+.customEntry button {
+  border-color: #d65f4d;
+  color: #a72d1e;
+  min-height: 36px;
+  padding: 7px 10px;
+}
+
 @media (max-width: 850px) {
   main {
     width: min(100% - 20px, 1180px);
@@ -270,7 +364,14 @@ button.active,
   }
 
   .options,
-  .matchGrid {
+  .matchGrid,
+  .customGrid,
+  .customEntry {
     grid-template-columns: 1fr;
+  }
+
+  .customHeader {
+    align-items: start;
+    flex-direction: column;
   }
 }

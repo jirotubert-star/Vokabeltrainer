@@ -225,6 +225,7 @@ export default function App() {
   const [newGermanWord, setNewGermanWord] = useState("");
   const [newFrenchWord, setNewFrenchWord] = useState("");
   const [customMessage, setCustomMessage] = useState("");
+  const [isStorageLoaded, setIsStorageLoaded] = useState(false);
 
   const cards = useMemo(
     () => flatten(selectedCategories.length ? selectedCategories : categories, allVocabulary),
@@ -235,9 +236,16 @@ export default function App() {
   useEffect(() => {
     setStats(loadProgress());
     setCustomVocabulary(loadCustomVocabulary());
+    setIsStorageLoaded(true);
   }, []);
-  useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(stats)), [stats]);
-  useEffect(() => localStorage.setItem(CUSTOM_VOCABULARY_KEY, JSON.stringify(customVocabulary)), [customVocabulary]);
+  useEffect(() => {
+    if (!isStorageLoaded) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stats));
+  }, [stats, isStorageLoaded]);
+  useEffect(() => {
+    if (!isStorageLoaded) return;
+    localStorage.setItem(CUSTOM_VOCABULARY_KEY, JSON.stringify(customVocabulary));
+  }, [customVocabulary, isStorageLoaded]);
 
   const nextQueue = () => {
     const next = shuffle(cards);
